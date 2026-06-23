@@ -213,6 +213,13 @@ A **migration** is a saved set of database changes, like a numbered diary entry
 environment (your laptop, the test server, the live server) can be brought to the
 exact same shape, step by step.
 
+> 📁 **Our first migration is real now.** After we ran `prisma migrate dev`, Prisma
+> created `prisma/migrations/<timestamp>_init/migration.sql` — the actual SQL that
+> builds the `users` and `refresh_tokens` tables (and the enums). It's committed to
+> the repo, so anyone can run `prisma migrate deploy` to get the exact same tables.
+> We also tested the whole service against a real PostgreSQL running in Docker, and
+> every endpoint behaved correctly (see file 10).
+
 ## Recap
 
 - An **ORM** translates our TypeScript into database language; ours is **Prisma**.
