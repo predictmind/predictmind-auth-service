@@ -36,6 +36,8 @@ npm run start:dev
 
 A local Postgres is available via the platform stack in `predictmind-infra` (`docker compose up postgres`).
 
+Once running, open the interactive API docs (Swagger UI) at **`http://localhost:3002/api/docs`** to try every endpoint from the browser.
+
 ## Scripts
 
 | Script | Purpose |

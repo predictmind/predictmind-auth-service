@@ -24,6 +24,7 @@ Read the files in number order:
 | 7 | [07-guard-controller-and-startup.md](07-guard-controller-and-startup.md) | The doors (routes), the bouncer (guard), and turning the app on |
 | 8 | [08-docker-and-running-it.md](08-docker-and-running-it.md) | How we package the app so it runs anywhere |
 | 9 | [09-glossary.md](09-glossary.md) | A dictionary of every tricky word |
+| 10 | [10-testing-with-swagger.md](10-testing-with-swagger.md) | Pushing the real buttons with Swagger UI at `/api/docs` |
 
 ## What does this service even do?
 
