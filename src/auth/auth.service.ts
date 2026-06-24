@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -27,6 +28,8 @@ export interface AuthResult {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -74,7 +77,7 @@ export class AuthService {
   }
 
   async refresh(refreshToken: string): Promise<AuthResult> {
-    const { id, raw } = this.splitRefreshToken(refreshToken);
+    const { id, raw } = this.splitToken(refreshToken);
 
     const record = await this.prisma.refreshToken.findUnique({
       where: { id },
@@ -104,7 +107,7 @@ export class AuthService {
   }
 
   async logout(refreshToken: string): Promise<void> {
-    const { id } = this.splitRefreshToken(refreshToken);
+    const { id } = this.splitToken(refreshToken);
     await this.prisma.refreshToken.updateMany({
       where: { id, revokedAt: null },
       data: { revokedAt: new Date() },
@@ -114,6 +117,76 @@ export class AuthService {
   async findById(userId: string): Promise<SafeUser | null> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     return user ? this.sanitize(user) : null;
+  }
+
+  /**
+   * Start a password reset. Always succeeds from the caller's point of view so
+   * we never reveal whether an email is registered (anti-enumeration). The
+   * reset token is logged (and, outside production, returned) until a real
+   * email service is wired up.
+   */
+  async requestPasswordReset(email: string): Promise<{ resetToken?: string }> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return {};
+    }
+
+    const raw = randomBytes(48).toString("base64url");
+    const tokenHash = await argon2.hash(raw);
+    const ttlMs = this.parseDurationMs(
+      this.config.get<string>("RESET_TOKEN_TTL", "1h"),
+    );
+    const record = await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + ttlMs),
+      },
+    });
+
+    const token = `${record.id}.${raw}`;
+    this.logger.log(
+      `Password reset requested for ${email}. Reset token (dev): ${token}`,
+    );
+
+    // TODO: send this token to the user via the email service (not built yet).
+    const isProd = this.config.get<string>("NODE_ENV") === "production";
+    return isProd ? {} : { resetToken: token };
+  }
+
+  /** Complete a password reset: consume the token, set the new password, and
+   *  revoke all sessions. */
+  async resetPassword(token: string, newPassword: string): Promise<void> {
+    const { id, raw } = this.splitToken(token);
+
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { id },
+    });
+    if (!record || record.usedAt || record.expiresAt.getTime() < Date.now()) {
+      throw new UnauthorizedException("Invalid or expired reset token");
+    }
+
+    const matches = await argon2.verify(record.tokenHash, raw);
+    if (!matches) {
+      throw new UnauthorizedException("Invalid or expired reset token");
+    }
+
+    const passwordHash = await argon2.hash(newPassword);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { passwordHash },
+      }),
+      this.prisma.passwordResetToken.update({
+        where: { id: record.id },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
   }
 
   private async buildAuthResult(user: User): Promise<AuthResult> {
@@ -148,15 +221,21 @@ export class AuthService {
     return `${record.id}.${raw}`;
   }
 
-  private splitRefreshToken(token: string): { id: string; raw: string } {
+  private splitToken(token: string): { id: string; raw: string } {
     const separator = token.indexOf(".");
     if (separator < 0) {
-      throw new UnauthorizedException("Malformed refresh token");
+      throw new UnauthorizedException("Malformed token");
     }
-    return {
-      id: token.slice(0, separator),
-      raw: token.slice(separator + 1),
-    };
+    const id = token.slice(0, separator);
+    const raw = token.slice(separator + 1);
+    // The id must be a UUID (our token row id). Reject anything else here so a
+    // garbage value never reaches the database (which would throw a 500).
+    const uuidPattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(id) || raw.length === 0) {
+      throw new UnauthorizedException("Malformed token");
+    }
+    return { id, raw };
   }
 
   private parseDurationMs(value: string): number {

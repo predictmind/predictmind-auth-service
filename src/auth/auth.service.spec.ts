@@ -1,4 +1,4 @@
-import { ConflictException } from "@nestjs/common";
+import { ConflictException, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import { Test, TestingModule } from "@nestjs/testing";
@@ -13,6 +13,11 @@ type MockPrisma = {
   };
   refreshToken: {
     create: jest.Mock;
+  };
+  passwordResetToken: {
+    create: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
   };
 };
 
@@ -29,6 +34,11 @@ describe("AuthService", () => {
       },
       refreshToken: {
         create: jest.fn().mockResolvedValue({ id: "rt-1" }),
+      },
+      passwordResetToken: {
+        create: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
       },
     };
 
@@ -88,5 +98,19 @@ describe("AuthService", () => {
         password: "a-very-strong-password",
       }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it("does not reveal whether an email exists on password reset request", async () => {
+    prisma.user.findUnique.mockResolvedValue(null);
+    const result = await service.requestPasswordReset("unknown@example.com");
+    expect(result).toEqual({});
+    expect(prisma.passwordResetToken.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects a reset with an invalid token", async () => {
+    prisma.passwordResetToken.findUnique.mockResolvedValue(null);
+    await expect(
+      service.resetPassword("missing-id.some-secret", "a-new-strong-password"),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });
