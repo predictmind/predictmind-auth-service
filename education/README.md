@@ -25,6 +25,7 @@ Read the files in number order:
 | 8 | [08-docker-and-running-it.md](08-docker-and-running-it.md) | How we package the app so it runs anywhere |
 | 9 | [09-glossary.md](09-glossary.md) | A dictionary of every tricky word |
 | 10 | [10-testing-with-swagger.md](10-testing-with-swagger.md) | Pushing the real buttons with Swagger UI at `/api/docs` |
+| 11 | [11-profile-and-account.md](11-profile-and-account.md) | Profile + change-password (the Users module) and a real bug we fixed |
 
 ## What does this service even do?
 
