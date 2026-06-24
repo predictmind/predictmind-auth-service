@@ -26,6 +26,12 @@ export interface AuthResult {
   refreshToken: string;
 }
 
+export interface SessionInfo {
+  id: string;
+  createdAt: Date;
+  expiresAt: Date;
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -117,6 +123,33 @@ export class AuthService {
   async findById(userId: string): Promise<SafeUser | null> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     return user ? this.sanitize(user) : null;
+  }
+
+  /** List a user's active (not revoked, not expired) sessions. We return only
+   *  safe metadata — never the token hash. */
+  async listSessions(userId: string): Promise<SessionInfo[]> {
+    return this.prisma.refreshToken.findMany({
+      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, createdAt: true, expiresAt: true },
+    });
+  }
+
+  /** Revoke one specific session, scoped to the owner so you can only end your
+   *  own sessions. */
+  async revokeSession(userId: string, sessionId: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { id: sessionId, userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
+
+  /** Revoke every active session for a user ("log out everywhere"). */
+  async logoutAll(userId: string): Promise<void> {
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
   }
 
   /**

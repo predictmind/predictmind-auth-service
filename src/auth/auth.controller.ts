@@ -1,15 +1,24 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Param,
+  ParseUUIDPipe,
   Post,
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiTags } from "@nestjs/swagger";
-import { AuthResult, AuthService, JwtPayload, SafeUser } from "./auth.service";
+import {
+  AuthResult,
+  AuthService,
+  JwtPayload,
+  SafeUser,
+  SessionInfo,
+} from "./auth.service";
 import { CurrentUser } from "./current-user.decorator";
 import { LoginDto } from "./dto/login.dto";
 import { RefreshDto } from "./dto/refresh.dto";
@@ -69,5 +78,31 @@ export class AuthController {
       throw new NotFoundException("User not found");
     }
     return user;
+  }
+
+  @Get("sessions")
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  listSessions(@CurrentUser() current: JwtPayload): Promise<SessionInfo[]> {
+    return this.auth.listSessions(current.sub);
+  }
+
+  @Delete("sessions/:id")
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async revokeSession(
+    @CurrentUser() current: JwtPayload,
+    @Param("id", ParseUUIDPipe) id: string,
+  ): Promise<void> {
+    await this.auth.revokeSession(current.sub, id);
+  }
+
+  @Post("logout-all")
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async logoutAll(@CurrentUser() current: JwtPayload): Promise<void> {
+    await this.auth.logoutAll(current.sub);
   }
 }

@@ -27,6 +27,7 @@ Read the files in number order:
 | 10 | [10-testing-with-swagger.md](10-testing-with-swagger.md) | Pushing the real buttons with Swagger UI at `/api/docs` |
 | 11 | [11-profile-and-account.md](11-profile-and-account.md) | Profile + change-password (the Users module) and a real bug we fixed |
 | 12 | [12-password-reset.md](12-password-reset.md) | Forgot/reset password, anti-enumeration, single-use tokens, and a 500→401 fix |
+| 13 | [13-session-management.md](13-session-management.md) | List/revoke sessions, logout-everywhere — completes Epic E1 |
 
 ## What does this service even do?
 

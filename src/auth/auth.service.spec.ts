@@ -13,6 +13,8 @@ type MockPrisma = {
   };
   refreshToken: {
     create: jest.Mock;
+    findMany: jest.Mock;
+    updateMany: jest.Mock;
   };
   passwordResetToken: {
     create: jest.Mock;
@@ -34,6 +36,8 @@ describe("AuthService", () => {
       },
       refreshToken: {
         create: jest.fn().mockResolvedValue({ id: "rt-1" }),
+        findMany: jest.fn(),
+        updateMany: jest.fn(),
       },
       passwordResetToken: {
         create: jest.fn(),
@@ -112,5 +116,24 @@ describe("AuthService", () => {
     await expect(
       service.resetPassword("missing-id.some-secret", "a-new-strong-password"),
     ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
+  it("lists only the user's active sessions (no token data)", async () => {
+    prisma.refreshToken.findMany.mockResolvedValue([
+      { id: "s1", createdAt: new Date(), expiresAt: new Date() },
+    ]);
+    const sessions = await service.listSessions("user-1");
+    expect(sessions).toHaveLength(1);
+    const call = prisma.refreshToken.findMany.mock.calls[0][0];
+    expect(call.where.userId).toBe("user-1");
+    expect(call.where.revokedAt).toBeNull();
+  });
+
+  it("revokes a single session scoped to the owner", async () => {
+    prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+    await service.revokeSession("user-1", "session-1");
+    const call = prisma.refreshToken.updateMany.mock.calls[0][0];
+    expect(call.where.id).toBe("session-1");
+    expect(call.where.userId).toBe("user-1");
   });
 });
